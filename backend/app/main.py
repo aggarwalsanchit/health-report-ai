@@ -1,21 +1,23 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
-import os
+from fastapi import FastAPI, Request
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
-load_dotenv()
+app = FastAPI()
 
-app = FastAPI(title="AI Health Report API")
+# Initialize limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Restrict in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Add middleware
+app.add_middleware(SlowAPIMiddleware)
+
+# Add exception handler
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.get("/")
-def read_root():
-    return {"message": "AI Health Report API is running"}
+@limiter.limit("5/minute")
+async def root(request: Request):
+    return {"message": "Health Report AI API is running"}
